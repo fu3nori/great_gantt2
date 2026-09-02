@@ -1,0 +1,50 @@
+<IfModule mod_rewrite.c>
+RewriteEngine On
+
+# -------------------------------------------------
+# Laravel Great Gantt
+# -------------------------------------------------
+
+# Laravel側へAuthorization / X-XSRF-Tokenヘッダーを引き継ぐ
+RewriteCond %{HTTP:Authorization} .
+RewriteRule ^great-gantt(?:/.*)?$ - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+RewriteCond %{HTTP:x-xsrf-token} .
+RewriteRule ^great-gantt(?:/.*)?$ - [E=HTTP_X_XSRF_TOKEN:%{HTTP:X-XSRF-Token}]
+
+# /great-gantt/public/... がブラウザーから直接要求された場合はpublicを隠す
+RewriteCond %{THE_REQUEST} \s/+great-gantt/public(?:[/\s?]|$) [NC]
+RewriteRule ^great-gantt/public(?:/(.*))?$ /great-gantt/$1 [R=302,L,NE]
+
+# 下記の公開ファイル用内部リライトを再処理しない
+RewriteRule ^great-gantt/public/(?:build|storage)(?:/.*)?$ - [L]
+RewriteRule ^great-gantt/public/(?:favicon\.ico|robots\.txt)$ - [L]
+
+# ソース、秘密情報、依存定義への直接アクセスを拒否
+RewriteRule ^great-gantt/(?:\.env(?:\..*)?|\.git(?:/|$)|artisan$|composer\.(?:json|lock)$|package(?:-lock)?\.json$|phpunit\.xml$) - [F,L,NC]
+RewriteRule ^great-gantt/(?:app|bootstrap|config|database|resources|routes|tests|vendor)(?:/|$) - [F,L,NC]
+
+# Laravel public配下の公開ファイル
+RewriteRule ^great-gantt/build/(.*)$ great-gantt/public/build/$1 [L]
+RewriteRule ^great-gantt/storage/(.*)$ great-gantt/public/storage/$1 [L]
+RewriteRule ^great-gantt/favicon\.ico$ great-gantt/public/favicon.ico [L]
+RewriteRule ^great-gantt/robots\.txt$ great-gantt/public/robots.txt [L]
+
+# Great Gantt本体（内部リライト後の再処理を停止してからfront controllerへ渡す）
+RewriteRule ^great-gantt/index\.php$ - [L]
+RewriteRule ^great-gantt(?:/.*)?$ great-gantt/index.php [L,QSA]
+
+# 既存の /entry をWordPressから除外
+RewriteRule ^entry(?:/.*)?$ - [L]
+</IfModule>
+
+# BEGIN WordPress
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+RewriteBase /
+RewriteRule ^index\.php$ - [L]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule . /index.php [L]
+</IfModule>
+# END WordPress

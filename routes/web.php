@@ -17,7 +17,8 @@ Route::get('/setup/admin', [InitialAdminController::class, 'create'])->name('set
 Route::post('/setup/admin', [InitialAdminController::class, 'store'])->name('setup.admin.store')->middleware('throttle:4,1');
 
 Route::middleware(EnsureSystemIsInitialized::class)->group(function () {
-    Route::get('/', fn () => auth()->check() ? redirect()->route('home') : redirect()->route('login'));
+    // 初期セットアップ判定後、既存HOMEルートへ接続する。Bladeはここから直接返さない。
+    Route::get('/', [HomeController::class, 'redirectToHome'])->name('top');
 
     Route::middleware('guest')->group(function () {
         Route::get('/login', [AuthController::class, 'create'])->name('login');
@@ -26,6 +27,7 @@ Route::middleware(EnsureSystemIsInitialized::class)->group(function () {
         Route::post('/register-owner', [OwnerRegistrationController::class, 'store'])->middleware('throttle:4,1');
     });
 
+    Route::get('/invitations/{token}/password', [InvitationController::class, 'password'])->name('invitations.password');
     Route::get('/invitations/{token}', [InvitationController::class, 'show'])->name('invitations.show');
     Route::post('/invitations/{token}', [InvitationController::class, 'accept'])->name('invitations.accept')->middleware('throttle:10,1');
 

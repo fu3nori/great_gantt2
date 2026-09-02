@@ -1,5 +1,7 @@
 # Great Gantt：さくらのレンタルサーバ デプロイ手順
 
+> **ugsf.orgのWordPress配下 `/great-gantt` へ配置する場合**は、先に `deployment/sakura/UPLOAD_README.md` を使用してください。以下の「Web公開フォルダーを `public` に向ける」手順は、独立ドメインまたはサブドメインでLaravelを単独公開する構成向けです。
+
 この手順書は、Great Gantt（Laravel 12 / Vite）を「さくらのレンタルサーバ」へ WinSCP で配置するためのものです。サーバーでは Node.js / npm を一切使用せず、JavaScript と CSS はローカルPCでビルドしてからアップロードします。
 
 確認日：2026年8月31日

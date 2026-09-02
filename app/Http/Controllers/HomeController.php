@@ -3,10 +3,16 @@
 namespace App\Http\Controllers;
 
 use App\Models\Project;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
 class HomeController extends Controller
 {
+    public function redirectToHome(Request $request): RedirectResponse
+    {
+        return redirect()->route($request->user() ? 'home' : 'login');
+    }
+
     public function __invoke(Request $request)
     {
         $user = $request->user();

@@ -71,6 +71,18 @@ class InvitationController extends Controller
         return view('invitations.show', compact('invitation', 'token', 'existingUser'));
     }
 
+    public function password(string $token)
+    {
+        $invitation = $this->find($token);
+        $existingUser = User::whereRaw('LOWER(email) = ?', [Str::lower($invitation->email)])->first();
+
+        if ($existingUser) {
+            return redirect()->route('invitations.show', $token);
+        }
+
+        return view('invitations.password', compact('invitation', 'token'));
+    }
+
     public function revoke(Request $request, Project $project, ProjectInvitation $invitation)
     {
         abort_unless($invitation->project_id === $project->id, 404);

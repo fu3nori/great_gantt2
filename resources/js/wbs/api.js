@@ -15,7 +15,7 @@ export async function patchTask(row, changes) {
     return body.task;
 }
 
-export async function deleteProject(projectId) {
-    const response = await fetch(`/projects/${projectId}`, {method:'DELETE',headers:{'Accept':'application/json','X-CSRF-TOKEN':csrf()}});
+export async function deleteProject(deleteUrl) {
+    const response = await fetch(deleteUrl, {method:'DELETE',headers:{'Accept':'application/json','X-CSRF-TOKEN':csrf()}});
     if (!response.ok && !response.redirected) throw new Error('プロジェクトを削除できませんでした。');
 }

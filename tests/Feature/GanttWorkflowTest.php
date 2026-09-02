@@ -130,7 +130,14 @@ class GanttWorkflowTest extends TestCase
         ['owner' => $owner,'organization' => $organization,'project' => $project] = $this->workspace();
         $token = 'known-secure-token';
         ProjectInvitation::create(['organization_id' => $organization->id, 'project_id' => $project->id, 'invited_by' => $owner->id, 'email' => 'new@example.com', 'role' => 'member', 'token_hash' => hash('sha256', $token), 'expires_at' => now()->addHour()]);
-        $this->get(route('invitations.show', $token))->assertOk();
+        $this->get(route('invitations.show', $token))
+            ->assertOk()
+            ->assertSee(route('invitations.password', $token), false)
+            ->assertDontSee('name="password"', false);
+        $this->get(route('invitations.password', $token))
+            ->assertOk()
+            ->assertSee('パスワードを設定')
+            ->assertSee('name="password"', false);
         $this->post(route('invitations.accept', $token), ['name' => 'New User', 'password' => 'password', 'password_confirmation' => 'password'])->assertRedirect(route('home'));
         $this->assertDatabaseHas('project_members', ['project_id' => $project->id, 'role' => 'member']);
         $expired = 'expired-token';
@@ -214,7 +221,15 @@ class GanttWorkflowTest extends TestCase
             'expires_at' => now()->addHour(),
         ]);
 
-        $this->get(route('invitations.show', $newToken))->assertOk()->assertSee('招待時の氏名');
+        $this->get(route('invitations.show', $newToken))
+            ->assertOk()
+            ->assertSee('招待時の氏名')
+            ->assertSee(route('invitations.password', $newToken), false)
+            ->assertDontSee('name="password"', false);
+        $this->get(route('invitations.password', $newToken))
+            ->assertOk()
+            ->assertSee('招待時の氏名')
+            ->assertSee('name="password_confirmation"', false);
         $this->post(route('invitations.accept', $newToken), [
             'password' => 'password',
             'password_confirmation' => 'password',
@@ -237,6 +252,7 @@ class GanttWorkflowTest extends TestCase
         $this->post(route('logout'));
         $invitationUrl = route('invitations.show', $existingToken);
         $this->get($invitationUrl)->assertOk()->assertSessionHas('url.intended', $invitationUrl);
+        $this->get(route('invitations.password', $existingToken))->assertRedirect($invitationUrl);
         $this->post(route('login'), ['email' => $existing->email, 'password' => 'password'])->assertRedirect($invitationUrl);
         $this->post(route('invitations.accept', $existingToken))->assertRedirect(route('home'));
         $this->assertDatabaseHas('project_members', ['project_id' => $project->id, 'user_id' => $existing->id, 'role' => 'member']);
@@ -247,6 +263,7 @@ class GanttWorkflowTest extends TestCase
     {
         ['owner' => $owner,'project' => $project] = $this->workspace();
         $task = $project->tasks()->create(['title' => 'Rendered task', 'start_date' => now()->subDay(), 'end_date' => now()->addDays(3), 'progress' => 40, 'status' => 'in_progress', 'created_by' => $owner->id]);
+        $this->actingAs($owner)->get(route('top'))->assertRedirect(route('home'));
         $this->actingAs($owner)->get(route('home'))->assertOk()->assertSee('Alpha')->assertSee('40%');
         $this->actingAs($owner)->get(route('projects.show', $project))->assertOk()->assertSee('Rendered task');
         $this->actingAs($owner)->get(route('tasks.show', [$project, $task]))
@@ -256,7 +273,7 @@ class GanttWorkflowTest extends TestCase
             ->assertSee(TaskStatus::InProgress->label())
             ->assertSee('data-task-status-badge', false)
             ->assertSee('コメント');
-        $this->actingAs($owner)->get(route('wbs'))->assertOk()->assertSee('WBS / ガントチャート')->assertSee('Rendered task')->assertSee('TODAY')->assertSee('scrollPrevDay')->assertSee('scrollNextDay')->assertSee('data-date="2026-10-01"', false);
+        $this->actingAs($owner)->get(route('wbs'))->assertOk()->assertSee('WBS / ガントチャート')->assertSee('Rendered task')->assertSee('TODAY')->assertSee('scrollPrevDay')->assertSee('scrollNextDay')->assertSee('data-date="2026-10-01"', false)->assertSee('data-project-url="'.route('projects.show', $project).'"', false)->assertSee('data-delete-url="'.route('projects.destroy', $project).'"', false);
     }
 
     public function test_only_system_admin_can_restore_soft_deleted_data(): void
