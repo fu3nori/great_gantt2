@@ -402,11 +402,13 @@ php artisan key:generate --force
 ### 9.3 DB接続を確認する
 
 ```bash
-php artisan optimize:clear
+php artisan config:clear
 php artisan migrate:status
 ```
 
-初回は `Migration table not found` と表示される場合がありますが、DBへ接続できていれば次へ進めます。`Access denied` や `Connection refused` が出る場合は、マイグレーションを行わず `.env` の `DB_HOST`、`DB_DATABASE`、`DB_USERNAME`、`DB_PASSWORD`、`DB_PORT=3306` を再確認します。
+`config:clear` は古い設定キャッシュだけを削除し、現在の `.env` を次のコマンドへ反映させます。初回は `CACHE_STORE=database` が使用する `cache` テーブルもまだ存在しないため、この時点では `php artisan optimize:clear` を実行しません。`optimize:clear` はアプリケーションキャッシュにもアクセスするので、マイグレーション前に実行すると `Table '...cache' doesn't exist` で失敗します。
+
+初回の `migrate:status` では `Migration table not found` と表示される場合がありますが、DBへ接続できていれば次へ進めます。`Access denied` や `Connection refused` が出る場合は、マイグレーションを行わず `.env` の `DB_HOST`、`DB_DATABASE`、`DB_USERNAME`、`DB_PASSWORD`、`DB_PORT=3306` を再確認します。
 
 ### 9.4 マイグレーションファイルを実行する
 
@@ -416,6 +418,8 @@ php artisan migrate:status
 php artisan migrate --force
 php artisan migrate:status
 ```
+
+2026年9月2日追加のHOME招待機能では、`2026_09_02_000000_add_name_to_project_invitations_table.php` が実行対象です。既存の招待データを保持したまま氏名欄を追加します。`migrate:status` でこのファイルが `Ran` になっていることを確認してください。
 
 すべての行が `Ran` になれば完了です。本番DBでは次を実行しないでください。
 
@@ -428,11 +432,14 @@ php artisan migrate --seed
 
 このリポジトリのSeederにはデモユーザーが含まれる可能性があるため、本番でSeederは実行しません。
 
-### 9.5 Laravelを最適化する
+### 9.5 キャッシュをクリアしてLaravelを最適化する
 
 ```bash
+php artisan optimize:clear
 php artisan optimize
 ```
+
+マイグレーションによって `cache` テーブルが作成された後なので、ここでは `optimize:clear` を安全に実行できます。初回デプロイの順番は、必ず `config:clear` → DB接続確認 → `migrate --force` → `optimize:clear` → `optimize` とします。
 
 ## 10. Web公開フォルダーを `public` に設定する
 
@@ -516,13 +523,14 @@ WinSCPで新しいアップロード用フォルダーの中身を `great-gantt`
 cd /home/example/www/great-gantt
 ~/bin/composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction
 ~/bin/composer check-platform-reqs --no-dev
-php artisan optimize:clear
+php artisan config:clear
 php artisan migrate --force
+php artisan optimize:clear
 php artisan optimize
 php artisan up
 ```
 
-最後に `/up`、ログイン、主要画面を確認します。更新時も `npm` コマンドと `key:generate` はサーバーで実行しません。
+`config:clear` を先に単独で実行することで、現在の `.env` をマイグレーションへ確実に反映します。その後、DBテーブルが揃った状態で `optimize:clear` と `optimize` を実行します。最後に `/up`、ログイン、主要画面を確認します。更新時も `npm` コマンドと `key:generate` はサーバーで実行しません。
 
 ## 13. よくある問題
 
@@ -531,10 +539,18 @@ php artisan up
 ```bash
 cd /home/example/www/great-gantt
 tail -n 100 storage/logs/laravel.log
-php artisan optimize:clear
+php artisan config:clear
+php artisan migrate:status
 ```
 
-主に `.env` の誤り、APP_KEY未生成、`storage` / `bootstrap/cache` の権限、Composer失敗を確認します。本番で `APP_DEBUG=true` にしてエラー画面を公開しないでください。
+マイグレーションがすべて `Ran` で、DB接続にも問題がないことを確認してから次を実行します。
+
+```bash
+php artisan optimize:clear
+php artisan optimize
+```
+
+`Migration table not found` または未実行のマイグレーションがある場合は、先に第9.4章の `php artisan migrate --force` を実行します。主に `.env` の誤り、APP_KEY未生成、`storage` / `bootstrap/cache` の権限、Composer失敗を確認します。本番で `APP_DEBUG=true` にしてエラー画面を公開しないでください。
 
 ### トップは開くが、ログイン等が404になる
 
@@ -560,7 +576,7 @@ public/build/assets/*
 - DB名とDBユーザー名を取り違えていないか。
 - DBパスワードの引用符を含めて `.env` の書式が正しいか。
 - コントロールパネルの対象DBとDBユーザーが一致しているか。
-- 設定変更後に `php artisan optimize:clear` を実行したか。
+- 設定変更後に `php artisan config:clear` を実行してから、`php artisan migrate:status` で再確認したか。
 
 ローカルPCからさくらの共用DBへ直接接続できないのは通常の仕様です。接続確認は、同じレンタルサーバー内のLaravel、SSH上のMySQLクライアント、またはphpMyAdminから行います。
 
@@ -581,7 +597,8 @@ Web側とCLI側で違うPHP版を使っていないか、コントロールパ�
 - SMTPホスト、587/465等のポート、ユーザー名、パスワード、暗号化方式を提供元の指示どおりに設定します。
 - `QUEUE_CONNECTION=sync` か確認します。
 - `storage/logs/laravel.log` を確認します。
-- `.env` 変更後は `php artisan optimize:clear` と `php artisan optimize` を実行します。
+- `.env` 変更後は `php artisan config:clear` を先に単独で実行し、続いて `php artisan optimize:clear` と `php artisan optimize` を実行します。
+- 招待リンクのホスト名は `APP_URL` から生成されるため、`APP_URL=https://実際の公開ドメイン` になっているか確認します。
 
 ### 別ブラウザへ変更が即時反映されない
 

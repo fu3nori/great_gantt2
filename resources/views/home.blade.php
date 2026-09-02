@@ -11,12 +11,24 @@
 @else
 <div class="row g-4" id="projectGrid">@foreach($projects as $project)
     <div class="col-xl-4 col-md-6" data-project-id="{{ $project->id }}"><article class="project-card h-100">
-        <div class="d-flex justify-content-between align-items-start"><span class="project-icon"><i class="bi bi-folder2-open"></i></span><span class="status-dot"><i></i> {{ $project->status === 'active' ? '進行中' : $project->status }}</span></div>
+        <div class="d-flex justify-content-between align-items-start"><span class="project-icon"><i class="bi bi-folder2-open"></i></span><div class="d-flex align-items-center gap-2">@can('inviteMember', $project)<button type="button" class="btn btn-sm btn-light project-card-action" data-bs-toggle="modal" data-bs-target="#homeInviteModal{{ $project->id }}" aria-label="{{ $project->name }}へユーザーを招待"><i class="bi bi-person-plus"></i> 招待</button>@endcan<span class="status-dot"><i></i> {{ $project->status === 'active' ? '進行中' : $project->status }}</span></div></div>
         <a class="stretched-link project-title" href="{{ route('projects.show', $project) }}">{{ $project->name }}</a><p class="project-description">{{ Str::limit($project->description ?: '説明はまだありません。', 78) }}</p>
         <div class="avatar-stack mb-3">@foreach($project->members->where('role','pm')->take(4) as $membership)<span class="avatar" title="{{ $membership->user->name }}">{{ mb_substr($membership->user->name,0,1) }}</span>@endforeach <small>PM {{ $project->members->where('role','pm')->pluck('user.name')->join(' / ') }}</small></div>
         <div class="progress-label"><span>進捗</span><strong data-project-progress>{{ $project->progress() }}%</strong></div><div class="progress app-progress"><div class="progress-bar" style="width:{{ $project->progress() }}%"></div></div>
         <div class="project-meta"><span><i class="bi bi-calendar3"></i>{{ $project->start_date->format('Y/m/d') }} — {{ $project->end_date->format('Y/m/d') }}</span><span><i class="bi bi-check2-square"></i>{{ $project->tasks->count() }} tasks</span></div>
     </article></div>
 @endforeach</div>
+
+@foreach($projects as $project)
+    @can('inviteMember', $project)
+    <div class="modal fade" id="homeInviteModal{{ $project->id }}" tabindex="-1" aria-labelledby="homeInviteModalLabel{{ $project->id }}">
+        <div class="modal-dialog"><form class="modal-content" method="post" action="{{ route('projects.invitations.store', $project) }}">@csrf
+            <div class="modal-header"><div><p class="eyebrow">INVITE MEMBER</p><h4 class="modal-title" id="homeInviteModalLabel{{ $project->id }}">{{ $project->name }}へ招待</h4></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button></div>
+            <div class="modal-body">@include('invitations._form', ['project' => $project])</div>
+            <div class="modal-footer"><button class="btn btn-primary"><i class="bi bi-send"></i> 招待メールを送信</button></div>
+        </form></div>
+    </div>
+    @endcan
+@endforeach
 @endif
 @endsection

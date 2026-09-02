@@ -8,6 +8,7 @@ use App\Models\Organization;
 use App\Models\Project;
 use App\Models\ProjectInvitation;
 use App\Models\User;
+use App\Notifications\ProjectInvitationNotification;
 use App\Notifications\TaskCommentPostedNotification;
 use App\Notifications\TaskProgressChangedNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -135,6 +136,111 @@ class GanttWorkflowTest extends TestCase
         $expired = 'expired-token';
         ProjectInvitation::create(['organization_id' => $organization->id, 'project_id' => $project->id, 'email' => 'old@example.com', 'role' => 'member', 'token_hash' => hash('sha256', $expired), 'expires_at' => now()->subMinute()]);
         $this->get(route('invitations.show', $expired))->assertStatus(410);
+    }
+
+    public function test_home_invitation_form_stores_name_and_position_and_sends_mail(): void
+    {
+        Notification::fake();
+        ['owner' => $owner, 'project' => $project] = $this->workspace();
+
+        $this->actingAs($owner)
+            ->get(route('home'))
+            ->assertOk()
+            ->assertSee('aria-label="Alphaへユーザーを招待"', false)
+            ->assertSee('氏名')
+            ->assertSee('メールアドレス')
+            ->assertSee('ポジション');
+
+        $this->actingAs($owner)
+            ->post(route('projects.invitations.store', $project), [
+                'name' => '招待 太郎',
+                'email' => 'INVITED@example.com',
+                'role' => 'pm',
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $invitation = ProjectInvitation::where('email', 'invited@example.com')->firstOrFail();
+        $this->assertSame('招待 太郎', $invitation->name);
+        $this->assertSame('pm', $invitation->role);
+        $this->assertNotSame('', $invitation->token_hash);
+        Notification::assertSentOnDemand(ProjectInvitationNotification::class, function ($notification, $channels, $notifiable) use ($invitation) {
+            $mail = $notification->toMail($notifiable);
+
+            return $notifiable->routes['mail'] === 'invited@example.com'
+                && $notification->invitation->is($invitation)
+                && $mail->greeting === '招待 太郎 様'
+                && str_contains($mail->actionUrl, '/invitations/');
+        });
+    }
+
+    public function test_invitation_rejects_existing_member_and_duplicate_pending_invitation(): void
+    {
+        Notification::fake();
+        ['owner' => $owner, 'member' => $member, 'project' => $project] = $this->workspace();
+
+        $this->actingAs($owner)
+            ->from(route('home'))
+            ->post(route('projects.invitations.store', $project), [
+                'name' => $member->name,
+                'email' => $member->email,
+                'role' => 'member',
+            ])
+            ->assertRedirect(route('home'))
+            ->assertSessionHasErrors('email');
+
+        $payload = ['name' => '重複 花子', 'email' => 'duplicate@example.com', 'role' => 'member'];
+        $this->actingAs($owner)->post(route('projects.invitations.store', $project), $payload)->assertSessionHasNoErrors();
+        $this->actingAs($owner)
+            ->from(route('home'))
+            ->post(route('projects.invitations.store', $project), $payload)
+            ->assertRedirect(route('home'))
+            ->assertSessionHasErrors('email');
+        $this->assertSame(1, ProjectInvitation::where('email', 'duplicate@example.com')->count());
+    }
+
+    public function test_new_user_accepts_with_invited_name_and_existing_user_returns_to_invitation_after_login(): void
+    {
+        ['owner' => $owner, 'organization' => $organization, 'project' => $project] = $this->workspace();
+        $newToken = 'new-user-token';
+        ProjectInvitation::create([
+            'organization_id' => $organization->id,
+            'project_id' => $project->id,
+            'invited_by' => $owner->id,
+            'email' => 'named@example.com',
+            'name' => '招待時の氏名',
+            'role' => 'member',
+            'token_hash' => hash('sha256', $newToken),
+            'expires_at' => now()->addHour(),
+        ]);
+
+        $this->get(route('invitations.show', $newToken))->assertOk()->assertSee('招待時の氏名');
+        $this->post(route('invitations.accept', $newToken), [
+            'password' => 'password',
+            'password_confirmation' => 'password',
+        ])->assertRedirect(route('home'));
+        $this->assertDatabaseHas('users', ['email' => 'named@example.com', 'name' => '招待時の氏名']);
+
+        $existing = User::factory()->create(['email' => 'existing-invite@example.com', 'password' => 'password']);
+        $existingToken = 'existing-user-token';
+        ProjectInvitation::create([
+            'organization_id' => $organization->id,
+            'project_id' => $project->id,
+            'invited_by' => $owner->id,
+            'email' => $existing->email,
+            'name' => '入力された別名',
+            'role' => 'member',
+            'token_hash' => hash('sha256', $existingToken),
+            'expires_at' => now()->addHour(),
+        ]);
+
+        $this->post(route('logout'));
+        $invitationUrl = route('invitations.show', $existingToken);
+        $this->get($invitationUrl)->assertOk()->assertSessionHas('url.intended', $invitationUrl);
+        $this->post(route('login'), ['email' => $existing->email, 'password' => 'password'])->assertRedirect($invitationUrl);
+        $this->post(route('invitations.accept', $existingToken))->assertRedirect(route('home'));
+        $this->assertDatabaseHas('project_members', ['project_id' => $project->id, 'user_id' => $existing->id, 'role' => 'member']);
+        $this->assertSame($existing->name, $existing->fresh()->name);
     }
 
     public function test_primary_gui_pages_render_with_shared_project_data(): void

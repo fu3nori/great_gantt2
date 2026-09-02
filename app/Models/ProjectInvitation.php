@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ProjectInvitation extends Model
 {
-    protected $fillable = ['organization_id', 'project_id', 'invited_by', 'email', 'role', 'token_hash', 'expires_at', 'accepted_at', 'revoked_at'];
+    protected $fillable = ['organization_id', 'project_id', 'invited_by', 'email', 'name', 'role', 'token_hash', 'expires_at', 'accepted_at', 'revoked_at'];
 
     protected function casts(): array
     {

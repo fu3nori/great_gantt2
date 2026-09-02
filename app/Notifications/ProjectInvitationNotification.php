@@ -24,7 +24,15 @@ class ProjectInvitationNotification extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
-        return (new MailMessage)->subject('プロジェクトへの招待')->line($this->invitation->project?->name.' へ招待されました。')
-            ->action('招待を承認', route('invitations.show', $this->token))->line('有効期限: '.$this->invitation->expires_at->format('Y/m/d H:i'));
+        $position = $this->invitation->role === 'pm' ? 'PM' : 'メンバー';
+
+        return (new MailMessage)
+            ->subject('【Great Gantt】プロジェクトへの招待')
+            ->greeting(($this->invitation->name ?: 'ご担当者').' 様')
+            ->line(($this->invitation->inviter?->name ?: 'プロジェクト管理者').'さんから「'.$this->invitation->project?->name.'」へ招待されました。')
+            ->line('ポジション: '.$position)
+            ->action('招待内容を確認して参加する', route('invitations.show', $this->token))
+            ->line('有効期限: '.$this->invitation->expires_at->format('Y/m/d H:i'))
+            ->line('この招待に心当たりがない場合は、このメールを破棄してください。');
     }
 }
